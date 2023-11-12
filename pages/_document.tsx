@@ -14,6 +14,7 @@ export default function Document(props: Props) {
       <Head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Chatbot Ollama"></meta>
+        <script src="https://code.responsivevoice.org/responsivevoice.js?key=oWlZEBbq"></script>{' '}
       </Head>
       <body>
         <Main />

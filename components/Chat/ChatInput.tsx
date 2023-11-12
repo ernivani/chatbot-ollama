@@ -1,6 +1,7 @@
 import {
   IconArrowDown,
-  IconBolt,
+  IconMicrophoneOff,
+  IconMicrophone,
   IconPlayerStop,
   IconRepeat,
   IconSend,
@@ -32,6 +33,7 @@ interface Props {
   stopConversationRef: MutableRefObject<boolean>;
   textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
   showScrollDownButton: boolean;
+  isSpeaking: boolean;
 }
 
 export const ChatInput = ({
@@ -41,6 +43,7 @@ export const ChatInput = ({
   stopConversationRef,
   textareaRef,
   showScrollDownButton,
+  isSpeaking,
 }: Props) => {
   const { t } = useTranslation('chat');
 
@@ -57,8 +60,11 @@ export const ChatInput = ({
   const [promptInputValue, setPromptInputValue] = useState('');
   const [variables, setVariables] = useState<string[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isListening, setIsListening] = useState(false); // State to manage speech recognition
+  const [autoSend, setAutoSend] = useState(false);
 
   const promptListRef = useRef<HTMLUListElement | null>(null);
+  const recognitionRef = useRef(null);
 
   const filteredPrompts = prompts.filter((prompt) =>
     prompt.name.toLowerCase().includes(promptInputValue.toLowerCase()),
@@ -70,6 +76,87 @@ export const ChatInput = ({
     setContent(value);
     updatePromptListVisibility(value);
   };
+
+  const startSpeechRecognition = () => {
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      let silenceTimer;
+      let finalTranscript = ''; // To store the final transcript
+
+      const resetSilenceTimer = () => {
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          recognition.stop();
+          setIsListening(false);
+        }, 3000); // 3 seconds of silence
+      };
+
+      recognition.onresult = function (event) {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        setContent(finalTranscript + interimTranscript);
+
+        if (interimTranscript.length > 0) {
+          resetSilenceTimer(); // Reset the timer only on interim results
+        }
+      };
+
+      recognition.onstart = function () {
+        resetSilenceTimer(); // Start the timer when recognition starts
+      };
+
+      recognition.onend = function () {
+        clearTimeout(silenceTimer);
+        setIsListening(false);
+
+        // If the final transcript has content, it means the user finished speaking
+        if (finalTranscript.trim().length > 0) {
+          setAutoSend(true); // Prepare for auto-send if the final transcript is not empty
+        }
+        console.log('Speech recognition ended');
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      console.log('Speech recognition started');
+    } else {
+      console.log('Speech recognition not supported');
+    }
+  };
+
+  useEffect(() => {
+    if (autoSend && content) {
+      console.log('Auto send');
+      handleSend();
+      setAutoSend(false);
+    }
+  }, [content, autoSend]); // Dépendances : content et autoSend
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log('isSpeeking', isSpeaking);
+    if (!isSpeaking) {
+      startSpeechRecognition();
+    }
+  }, [isSpeaking]);
 
   const handleSend = () => {
     if (messageIsStreaming) {
@@ -263,9 +350,16 @@ export const ChatInput = ({
 
         <div className="relative mx-2 flex w-full flex-grow flex-col rounded-md border border-black/10 bg-white shadow-[0_0_10px_rgba(0,0,0,0.10)] dark:border-gray-900/50 dark:bg-[#40414F] dark:text-white dark:shadow-[0_0_15px_rgba(0,0,0,0.10)] sm:mx-4">
           <div
-            className="absolute left-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"
+            className="absolute left-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200 hover:bg-neutral-200 hover:text-neutral-900 cursor-pointer dark:hover:bg-neutral-800"
+            onClick={
+              isListening ? stopSpeechRecognition : startSpeechRecognition
+            }
           >
-            <IconBolt size={20} />
+            {isListening ? (
+              <IconMicrophone size={18} />
+            ) : (
+              <IconMicrophoneOff size={18} />
+            )}
           </div>
           <textarea
             ref={textareaRef}
