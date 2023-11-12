@@ -36,6 +36,48 @@ interface Props {
   isSpeaking: boolean;
 }
 
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onstart: () => void;
+  onend: () => void;
+}
+
+declare var SpeechRecognition: {
+  prototype: SpeechRecognition;
+  new (): SpeechRecognition;
+};
+
+interface CustomWindow extends Window {
+  webkitSpeechRecognition?: typeof SpeechRecognition;
+}
+
 export const ChatInput = ({
   onSend,
   onRegenerate,
@@ -64,7 +106,7 @@ export const ChatInput = ({
   const [autoSend, setAutoSend] = useState(false);
 
   const promptListRef = useRef<HTMLUListElement | null>(null);
-  const recognitionRef = useRef(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const filteredPrompts = prompts.filter((prompt) =>
     prompt.name.toLowerCase().includes(promptInputValue.toLowerCase()),
@@ -78,14 +120,15 @@ export const ChatInput = ({
   };
 
   const startSpeechRecognition = () => {
-    if ('webkitSpeechRecognition' in window) {
-      const recognition = new webkitSpeechRecognition();
+    const customWindow: CustomWindow = window;
+    if (customWindow.webkitSpeechRecognition) {
+      const recognition = new customWindow.webkitSpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
-      let silenceTimer;
-      let finalTranscript = ''; // To store the final transcript
+      let silenceTimer: ReturnType<typeof setTimeout>;
+      let finalTranscript = ''; // TypeScript infers this as string
 
       const resetSilenceTimer = () => {
         clearTimeout(silenceTimer);
@@ -95,7 +138,7 @@ export const ChatInput = ({
         }, 3000); // 3 seconds of silence
       };
 
-      recognition.onresult = function (event) {
+      recognition.onresult = function (event: SpeechRecognitionEvent) {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {

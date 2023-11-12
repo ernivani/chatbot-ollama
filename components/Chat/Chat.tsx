@@ -37,6 +37,16 @@ interface Props {
   stopConversationRef: MutableRefObject<boolean>;
 }
 
+interface CustomWindow extends Window {
+  responsiveVoice?: {
+    speak: (
+      message: string,
+      voice: string,
+      options: { onend: () => void },
+    ) => void;
+  };
+}
+
 export const Chat = memo(({ stopConversationRef }: Props) => {
   const { t } = useTranslation('chat');
   const {
@@ -296,16 +306,18 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
       );
   }, [selectedConversation, throttledScrollDown]);
 
-  const speak = (message) => {
-    if (typeof window !== 'undefined' && window.responsiveVoice) {
+  const speak = (message: string) => {
+    const customWindow: CustomWindow = window;
+
+    if (typeof customWindow !== 'undefined' && customWindow.responsiveVoice) {
       setIsSpeaking(true);
-      window.responsiveVoice.speak(message, 'UK English Female', {
+      customWindow.responsiveVoice.speak(message, 'UK English Female', {
         onend: () => {
           console.log('Parole terminée');
           setIsSpeaking(false);
         },
       });
-      
+
       // window.responsiveVoice.speak(message, 'French Female', {
       //   onend: () => {
       //     console.log('Parole terminée');
@@ -315,20 +327,24 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
     }
   };
 
-
   useEffect(() => {
-    // Filter out the assistant's messages and get the last one
-    const assistantMessages = selectedConversation?.messages.filter(
-      (message) => message.role === 'assistant',
-    );
-    const lastAssistantMessage =
-      assistantMessages[assistantMessages.length - 1];
+    // Ensure that selectedConversation is defined and has messages
+    if (selectedConversation && selectedConversation.messages) {
+      const assistantMessages = selectedConversation.messages.filter(
+        (message: Message) => message.role === 'assistant',
+      );
 
-    // Check if there is a new message from the assistant to speak
-    if (lastAssistantMessage && lastAssistantMessage !== currentMessage) {
-      setCurrentMessage(lastAssistantMessage);
-      console.log('Assistant message:', lastAssistantMessage.content);
-      speak(lastAssistantMessage.content);
+      // Proceed only if there are any assistant messages
+      if (assistantMessages.length > 0) {
+        const lastAssistantMessage =
+          assistantMessages[assistantMessages.length - 1];
+
+        if (lastAssistantMessage && lastAssistantMessage !== currentMessage) {
+          setCurrentMessage(lastAssistantMessage);
+          console.log('Assistant message:', lastAssistantMessage.content);
+          speak(lastAssistantMessage.content);
+        }
+      }
     }
   }, [selectedConversation]); // Depend on the selectedConversation
 
